@@ -14,25 +14,60 @@ Version    : .01
     <script src="jquery-1.3.2.min.js" type="text/javascript"></script>
     <script src="jquery.corners.min.js" type="text/javascript"></script>
     <script type="text/javascript">
-    function verifyCredentials(){
+    function verifyCredentials(name, passwd, callBack){
         $.ajax({
             type: "GET",
             url: "checkpasswd",
-            username: "russell",
-            password: "testing",
-            success: function(msg){
-                alert(msg);
-            }
+            username: name,
+            password: passwd,
+            success: callBack
         });
     }
+    function onCredentialsVerified(msg){
+        alert(msg);
+        // TODO: validate msg and repeat until valid credentials are received
+        $('#LoginBox').hide();
+        $('#PostNotification').show();
+        $('#NotificationContainer').show();
+        listenForNotifications('russell', 'testing', onNotificationReceived);
+    }
+    function postNotification(name, passwd, notification, callBack){
+        $.ajax({
+            type: "POST",
+            url: "post",
+            username: name,
+            password: passwd,
+            dataType: 'json',
+            data: ({'notificationText': notification}),
+            success: callBack
+        });
+    }
+    function onNotificationSent(msg){
+        alert(msg);
+    }
+    function listenForNotifications(name, passwd, callBack){
+        $.ajax({
+            type: "GET",
+            url: "listen",
+            username: name,
+            password: passwd,
+            success: callBack
+        });
+    }
+    function onNotificationReceived(msg){
+        // TODO: Verify that this isn't a bad credentials message
+        var msgObj = eval(msg)
+        $('#NotificationContainer').prepend('<div class="Notification"><a>' + msgObj.message + '</a></div>');
+        listenForNotifications('russell', 'testing', onNotificationReceived);
+    }
     $(document).ready(function(){
+        $('#PostNotification').hide()
         $('#NotificationContainer').hide()
         $('button#LogIn').click(function(){
-            var user = $('input#user').val();
-            var pass = $('input#pass').val();
-            $('#LoginBox').hide();
-            $('#NotificationContainer').slideDown();
-            verifyCredentials();
+            verifyCredentials($('input#user').val(), $('input#pass').val(), onCredentialsVerified);
+        });
+        $('#NotifyButton').click(function(){
+            postNotification($('input#user').val(), $('input#pass').val(), $('input#notificationText').val(), onNotificationSent);
         });
     });
     </script>
@@ -43,6 +78,10 @@ Version    : .01
     <p><label for="user">Name:</label><input id="user" type="text" /></p>
     <p><label for="pass">Pass:</label><input id="pass" type="password" /></p>
     <p><button id="LogIn">Go!</button></p>
+</div>
+<div id="PostNotification">
+    <p><label for="notificationText">Text:</label><input id="notificationText" type="text" /></p>
+    <p><button id="NotifyButton">Notify</button></p>
 </div>
 <div id="NotificationContainer">
     <div class="Notification">

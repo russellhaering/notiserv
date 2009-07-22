@@ -1,5 +1,3 @@
-import time
-import re
 from twisted.application import internet, service 
 from twisted.web import http, server, resource, rewrite
 from twisted.web.static import File
@@ -17,11 +15,31 @@ class RootResource(resource.Resource):
         self.putChild('', File('index.html'))
         self.putChild('jquery-1.3.2.min.js', File('jquery-1.3.2.min.js'))
         self.putChild('jquery.corners.min.js', File('jquery.corners.min.js'))
-        self.putChild('post', NotificationRequester(manager))
-        self.putChild('listen', ClientRequester(manager))
+        self.putChild('post', NotificationPoster(manager))
+        self.putChild('listen', NotificationRequester(manager))
         self.putChild('checkpasswd', PasswordCheckerResource(manager))
     
 ### Post Notification ####################################################
+
+class NotificationPoster(resource.Resource):
+    isLeaf = True
+
+    def __init__(self, manager):
+        resource.Resource.__init__(self)
+        self.manager = manager
+
+    def render_POST(self, request):
+        if not self.manager.checkCredentials(request):
+            return "{'success': false, 'message': 'Invalid Credentials'}"
+        if 'notificationText' not in request.args:
+            return "{'success': false, 'message': 'Blank notifications are not allowed'}"
+        text = request.args['notificationText']
+        print "Notifying clients for user", request.getUser()
+        self.manager.notifyDelegates(request.getUser(), '({ "success" : "true", "message" : "' + text[0] + '" })')
+        return "{'success': 'true', 'message': 'Notification Sent Successfully'}"
+
+
+### Listen for Notification #####################################################
 
 class NotificationRequester(resource.Resource):
     isLeaf = True
@@ -29,32 +47,12 @@ class NotificationRequester(resource.Resource):
     def __init__(self, manager):
         resource.Resource.__init__(self)
         self.manager = manager
-
-    def render_POST(self, request):
-        user = request.getUser()
-        if (user == ""):
-            request.setResponseCode(http.UNAUTHORIZED)
-            return 'Try Logging In'
-        print "Notifying clients for user", user
-        self.manager.notifyDelegates(user, "Notification")
-        return 'Notifications Sent'
-
-
-### Listen for Notification #####################################################
-
-class ClientRequester(resource.Resource):
-    isLeaf = True
-
-    def __init__(self, manager):
-        resource.Resource.__init__(self)
-        self.manager = manager
     
-    def render_POST(self, request):
-        user = request.getUser()
-        if (user == ""):
-            request.setResponseCode(http.UNAUTHORIZED)
-            return 'Try Logging In'
-        self.manager.addDelegate(user, ClientDelegate(request))
+    def render_GET(self, request):
+        print "Delegate Request Received"
+        if not self.manager.checkCredentials(request):
+            return "{'success': false, 'message': 'Invalid Credentials'}"
+        self.manager.addDelegate(request.getUser(), ClientDelegate(request))
         return server.NOT_DONE_YET
 
 ### Verify Credentials #####################################################
@@ -67,14 +65,10 @@ class PasswordCheckerResource(resource.Resource):
         self.manager = manager
     
     def render_GET(self, request):
-        user = request.getUser()
-        passwd = request.getPassword()
-        print user, passwd
-        if self.manager.checkCredentials(user, passwd):
-            return "{'success': true, 'message': 'Valid Credentials'}"
+        if self.manager.checkCredentials(request):
+            return "{'success': true}"
         else:
-            request.setResponseCode(http.UNAUTHORIZED)
-            return "{'sucecss': false, 'message': 'Invalid Credentials'}"
+            return "{'success': false}"
 
 ### client connection ####################################################
 
@@ -93,12 +87,22 @@ class ClientManager:
     # This logic is bad, if the client reconnects fast enough they could
     # get the same notification over and over (maybe?)
     def notifyDelegates(self, user, notification):
-        for delegate in self._clients[user]:
-            delegate.notify(notification)
-        del self._clients[user]
+        if user in self._clients:
+            for delegate in self._clients[user]:
+                delegate.notify(notification)
+                print "Delegate Notified"
+            del self._clients[user]
+        else:
+            print "No delegates for user", user
 
-    def checkCredentials(self, user, passwd):
-        return user != "" and passwd != "" and passwd == self._authDB[user]
+    def checkCredentials(self, request):
+        user, passwd = request.getUser(), request.getPassword()
+        if user in self._authDB and self._authDB[user] == passwd:
+            return True
+        else:
+            request.setHeader('WWW-Authenticate', 'Basic realm="NotiServ API"')
+            request.setResponseCode(http.UNAUTHORIZED)
+            return False
 
     def registerUser(self, user, passwd):
         if user in self._authDB:
@@ -112,7 +116,7 @@ class ClientDelegate:
 
     def notify(self, notification):
         self.request.write(notification)
-        self.request.end()
+        self.request.finish()
 
 
 ### main #################################################################
