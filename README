@@ -1,0 +1,49 @@
+Requirements:
+    twisted web
+    libnotify-python (example client only)
+
+Usage:
+    Server:
+        run 'twistd -noy notiserv.py'
+
+        The server will run on port 9100. Currently only username 'russell' and
+        password 'testing' are supported. Support for user registration and
+        more configurability is planned.
+
+    Client:
+        run 'python client-example.py'
+
+Web API:
+    Note: This API is still under heavy development, this documentation is only
+    meant to give you some idea how to use it.
+
+    All method require use of HTTP Basic Authentication
+
+    Methods:
+        /post
+            Description: Post a notification for the authenticated user
+            Method: POST
+            Required Arguments:
+                notificationText: The text of your notification
+        /listen
+            Description: Listen for notifications. This will not return until
+                a notification is available. At that point you should
+                immediately call this method again to get any further
+                notifications.
+            Method: GET
+            Required Arguments: None
+
+        /checkpasswd
+            Description: A convenience method you can use to check credentials
+                provided by a user.
+            Method: GET
+            Required Arguments: None
+
+    Return Values:
+        All methods return a JSON object with the following attributes:
+            
+            success: A boolean value denoting success of the call
+            message: A string value with a human-readable message. This might
+                        be an error message if success = false, notification
+                        text if success = true for the listen method. The
+                        checkpasswd method currently does not return a message.
