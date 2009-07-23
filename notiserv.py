@@ -35,7 +35,7 @@ class NotificationPoster(resource.Resource):
             return "{'success': false, 'message': 'Blank notifications are not allowed'}"
         text = request.args['notificationText']
         print "Notifying clients for user", request.getUser()
-        self.manager.notifyDelegates(request.getUser(), '({ "success" : "true", "message" : "' + text[0] + '" })')
+        self.manager.notifyDelegates(request.getUser(), '{ "success" : "true", "message" : "' + text[0] + '" }')
         return "{'success': 'true', 'message': 'Notification Sent Successfully'}"
 
 
